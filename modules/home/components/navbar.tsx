@@ -17,7 +17,7 @@ const Navbar = ({ userRole }: { userRole: any }) => {
                     <Link href={"/"} className="flex items-center gap-2">
                         <Image src={"/logo.svg"} alt="TreeBio" width={42} height={42} />
                         <span className="font-bold text-2xl tracking-widest text-amber-300">
-                            LeetCode
+                            LeetMeOut
                         </span>
                     </Link>
 

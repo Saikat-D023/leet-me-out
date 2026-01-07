@@ -22,7 +22,7 @@ interface CreateProblemBody {
     tags: string[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     examples: any[]; // You might want to define a stricter type for examples if possible
-    constraints: string[]; // Assuming constraints are strings
+    constraints: string; // Changed from string[] to match frontend
     testCases: TestCase[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     codeSnippets: any; // Define strict type if available
@@ -91,64 +91,72 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        for (const [language, solutionCode] of Object.entries(referenceSolutions)) {
-            // Step 2.1: Get Judge0 language ID for the current language
-            const languageId = getJudge0LanguageId(language);
-            if (!languageId) {
-                return NextResponse.json(
-                    { error: `Unsupported language: ${language}` },
-                    { status: 400 }
-                );
-            }
+        // Only validate with Judge0 if the API URL is configured
+        if (process.env.JUDGE0_API_URL) {
+            console.log('Judge0 validation enabled - validating reference solutions...');
 
-            // Step 2.2: Prepare Judge0 submissions for all test cases
-            const submissions = testCases.map(({ input, output }) => ({
-                source_code: solutionCode,
-                language_id: languageId,
-                stdin: input,
-                expected_output: output,
-            }));
-
-
-
-            // Step 2.3: Submit all test cases in one batch
-            const submissionResults = await submitBatch(submissions);
-
-            // Step 2.4: Extract tokens from response
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const tokens = submissionResults.map((res: any) => res.token);
-
-            // Step 2.5: Poll Judge0 until all submissions are done
-            const results = await pollBatchResults(tokens);
-
-            // Step 2.6: Validate that each test case passed (status.id === 3)
-            for (let i = 0; i < results.length; i++) {
-                const result = results[i];
-                console.log(`Test case ${i + 1} details:`, {
-                    input: submissions[i].stdin,
-                    expectedOutput: submissions[i].expected_output,
-                    actualOutput: result.stdout,
-                    status: result.status,
-                    language: language,
-                    error: result.stderr || result.compile_output,
-                });
-
-                if (result.status.id !== 3) {
+            for (const [language, solutionCode] of Object.entries(referenceSolutions)) {
+                // Step 2.1: Get Judge0 language ID for the current language
+                const languageId = getJudge0LanguageId(language);
+                if (!languageId) {
                     return NextResponse.json(
-                        {
-                            error: `Validation failed for ${language}`,
-                            testCase: {
-                                input: submissions[i].stdin,
-                                expectedOutput: submissions[i].expected_output,
-                                actualOutput: result.stdout,
-                                error: result.stderr || result.compile_output,
-                            },
-                            details: result,
-                        },
+                        { error: `Unsupported language: ${language}` },
                         { status: 400 }
                     );
                 }
+
+                // Step 2.2: Prepare Judge0 submissions for all test cases
+                const submissions = testCases.map(({ input, output }) => ({
+                    source_code: solutionCode,
+                    language_id: languageId,
+                    stdin: input,
+                    expected_output: output,
+                }));
+
+
+
+                // Step 2.3: Submit all test cases in one batch
+                const submissionResults = await submitBatch(submissions);
+
+                // Step 2.4: Extract tokens from response
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const tokens = submissionResults.map((res: any) => res.token);
+
+                // Step 2.5: Poll Judge0 until all submissions are done
+                const results = await pollBatchResults(tokens);
+
+                // Step 2.6: Validate that each test case passed (status.id === 3)
+                for (let i = 0; i < results.length; i++) {
+                    const result = results[i];
+                    console.log(`Test case ${i + 1} details:`, {
+                        input: submissions[i].stdin,
+                        expectedOutput: submissions[i].expected_output,
+                        actualOutput: result.stdout,
+                        status: result.status,
+                        language: language,
+                        error: result.stderr || result.compile_output,
+                    });
+
+                    if (result.status.id !== 3) {
+                        return NextResponse.json(
+                            {
+                                error: `Validation failed for ${language}`,
+                                testCase: {
+                                    input: submissions[i].stdin,
+                                    expectedOutput: submissions[i].expected_output,
+                                    actualOutput: result.stdout,
+                                    error: result.stderr || result.compile_output,
+                                },
+                                details: result,
+                            },
+                            { status: 400 }
+                        );
+                    }
+                }
             }
+        } else {
+            console.warn('⚠️  JUDGE0_API_URL not configured - skipping reference solution validation');
+            console.warn('⚠️  Problems will be created without validating that reference solutions work correctly');
         }
 
         // Step 3: Save the problem in the database after all validations pass

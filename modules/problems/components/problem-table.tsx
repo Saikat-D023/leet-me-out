@@ -40,26 +40,52 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
-const ProblemsTable = ({ problems, user }) => {
-    const [search, setSearch] = useState("");
-    const [difficulty, setDifficulty] = useState("ALL");
-    const [selectedTag, setSelectedTag] = useState("ALL");
-    const [currentPage, setCurrentPage] = useState(1);
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+// Type definitions
+type Difficulty = "EASY" | "MEDIUM" | "HARD";
+
+interface Problem {
+    id: string;
+    title: string;
+    tags?: string[];
+    difficulty: Difficulty;
+    solvedBy: Array<{ id: string }> | string[]; // Adjust based on your actual data structure
+}
+
+interface User {
+    id: string;
+    role: "ADMIN" | "USER";
+}
+
+interface ProblemsTableProps {
+    problems: Problem[];
+    user: User | null;
+}
+
+interface PlaylistData {
+    name: string;
+    description?: string;
+}
+
+const ProblemsTable: React.FC<ProblemsTableProps> = ({ problems, user }) => {
+    const [search, setSearch] = useState<string>("");
+    const [difficulty, setDifficulty] = useState<string>("ALL");
+    const [selectedTag, setSelectedTag] = useState<string>("ALL");
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
     const [isAddToPlaylistModalOpen, setIsAddToPlaylistModalOpen] =
-        useState(false);
-    const [selectedProblemId, setSelectedProblemId] = useState(null);
+        useState<boolean>(false);
+    const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
 
     // Extract all unique tags from problems
     const allTags = useMemo(() => {
         if (!Array.isArray(problems)) return [];
-        const tagsSet = new Set();
+        const tagsSet = new Set<string>();
         problems.forEach((p) => p.tags?.forEach((t) => tagsSet.add(t)));
         return Array.from(tagsSet);
     }, [problems]);
 
     // Define allowed difficulties
-    const difficulties = ["EASY", "MEDIUM", "HARD"];
+    const difficulties: Difficulty[] = ["EASY", "MEDIUM", "HARD"];
 
     // Filter problems based on search, difficulty, and tags
     const filteredProblems = useMemo(() => {
@@ -85,7 +111,7 @@ const ProblemsTable = ({ problems, user }) => {
         );
     }, [filteredProblems, currentPage]);
 
-    const handleDelete = async (id) => {
+    const handleDelete = async (id: string) => {
         const result = await deleteProblem(id);
         if (result.success) {
             toast.success(result.message);
@@ -94,7 +120,7 @@ const ProblemsTable = ({ problems, user }) => {
         }
     };
 
-    const handleCreatePlaylist = async (data) => {
+    const handleCreatePlaylist = async (data: PlaylistData) => {
         try {
             const response = await fetch("/api/playlists", {
                 method: "POST",
@@ -115,11 +141,12 @@ const ProblemsTable = ({ problems, user }) => {
             }
         } catch (error) {
             console.error("Error creating playlist:", error);
-            toast.error(error.message || "Failed to create playlist");
+            const errorMessage = error instanceof Error ? error.message : "Failed to create playlist";
+            toast.error(errorMessage);
         }
     };
 
-    const handleAddToPlaylist = async (problemId, playlistId) => {
+    const handleAddToPlaylist = async (problemId: string, playlistId: string) => {
         try {
             const response = await fetch("/api/playlists/add-problem", {
                 method: "POST",
@@ -137,11 +164,12 @@ const ProblemsTable = ({ problems, user }) => {
             }
         } catch (error) {
             console.error("Error adding to playlist:", error);
-            toast.error(error.message || "Failed to add problem to playlist");
+            const errorMessage = error instanceof Error ? error.message : "Failed to add problem to playlist";
+            toast.error(errorMessage);
         }
     };
 
-    const getDifficultyVariant = (difficulty) => {
+    const getDifficultyVariant = (difficulty: Difficulty): "default" | "secondary" | "destructive" | "outline" => {
         switch (difficulty) {
             case "EASY":
                 return "default";
@@ -154,7 +182,7 @@ const ProblemsTable = ({ problems, user }) => {
         }
     };
 
-    const getDifficultyColor = (difficulty) => {
+    const getDifficultyColor = (difficulty: Difficulty): string => {
         switch (difficulty) {
             case "EASY":
                 return "bg-green-100 text-green-800 hover:bg-green-100";
@@ -177,10 +205,20 @@ const ProblemsTable = ({ problems, user }) => {
                         Manage and solve coding problems
                     </p>
                 </div>
-                <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Create Playlist
-                </Button>
+                <div className="flex gap-2">
+                    {user?.role === "ADMIN" && (
+                        <Link href="/create-problem">
+                            <Button className="gap-2">
+                                <Plus className="h-4 w-4" />
+                                Create Problem
+                            </Button>
+                        </Link>
+                    )}
+                    <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Create Playlist
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -386,12 +424,14 @@ const ProblemsTable = ({ problems, user }) => {
                 onSubmit={handleCreatePlaylist}
             />
 
-            <AddToPlaylistModal
-                isOpen={isAddToPlaylistModalOpen}
-                onClose={() => setIsAddToPlaylistModalOpen(false)}
-                onSubmit={handleAddToPlaylist}
-                problemId={selectedProblemId}
-            />
+            {selectedProblemId && (
+                <AddToPlaylistModal
+                    isOpen={isAddToPlaylistModalOpen}
+                    onClose={() => setIsAddToPlaylistModalOpen(false)}
+                    onSubmit={handleAddToPlaylist}
+                    problemId={selectedProblemId}
+                />
+            )}
         </div>
     );
 };
